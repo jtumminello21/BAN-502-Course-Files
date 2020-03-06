@@ -1,0 +1,84 @@
+---
+editor_options:
+  chunk_output_type: console
+output:
+  word_document: default
+  html_document: default
+---
+```{r}
+library(tidyverse)
+library(caret)
+library(ranger)
+```
+
+```{r}
+blood <- read_csv("Blood.csv")
+```
+
+```{r}
+blood <- blood %>%
+  drop_na()
+```
+
+```{r}
+blood <- blood %>%
+  mutate(DonatedMarch = as_factor(as.character(DonatedMarch))) %>%
+  mutate(DonatedMarch = fct_recode(DonatedMarch,
+    "No" = "0",
+    "Yes" = "1"))
+```
+
+Task 1
+```{r}
+set.seed(12345) 
+train.rows <- createDataPartition(y = blood$DonatedMarch, p=0.7, list = FALSE)
+train <- blood[train.rows,] 
+test <- blood[-train.rows,]
+```
+
+Task 2
+```{r}
+fit_control <- trainControl(method = "cv", number = 10)
+set.seed(123)
+rf_fit <- train(x=blood[,-5], y=blood$DonatedMarch, method = "ranger", importance = "permutation", trControl = fit_control, num.trees = 100)
+```
+
+Task 3
+```{r}
+varImp(rf_fit)
+rf_fit
+```
+The most important variable is Total_Donated, and the least important variable is Mnths_Since_Last.
+
+Task 4
+```{r}
+predRF <- predict(rf_fit, train)
+head(predRF )
+```
+
+Task 5
+```{r}
+confusionMatrix(predRF,train$DonatedMarch,positive = "Yes")
+```
+Accuracy: .8912
+Sensitivity: .5840
+Specificity: .9875
+
+Task 6: The accuracy is greater than the No Information Rate, so we know that we should rely on this model rather than the naive.
+
+Task 7
+```{r}
+predRF1 <- predict(rf_fit, test)
+head(predRF)
+```
+
+```{r}
+confusionMatrix(predRF1,test$DonatedMarch,positive = "Yes")
+```
+Accuracy: .875
+Sensitivity: .556
+Specificity: .9708
+
+Like with our training set, the accuracy is greater than the No information Rate, and this model should be used over the naive model.
+
+Task 8: A model like this would be useful for a blood bank. The bank will be able to use these models to find the most important variables, ensure they will meet future demands, or to see where their future inventory levels will be.  I would recommend the use of the training model over the testing model because it has a higher accuracy. The bank would need to work with smaller datasets because running these models can be computationally intensive when working with a large amount of data.

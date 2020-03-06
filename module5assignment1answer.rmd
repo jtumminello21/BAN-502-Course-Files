@@ -1,0 +1,261 @@
+---
+output:
+  word_document: default
+  html_document: default
+editor_options: 
+  chunk_output_type: console
+---
+```{r}
+#install.packages("nnet")
+#install.packages("caretEnsemble")
+```
+
+```{r}
+library(tidyverse)
+library(caret)
+library(nnet)
+library(rpart)
+library(caretEnsemble)
+library(ranger)
+```
+
+```{r}
+parole <- read_csv("parole.csv")
+```
+
+```{r}
+parole <- parole %>%
+  mutate(male = as_factor(as.character(male))) %>%
+  mutate(male = fct_recode(male,
+    "Female" = "0",
+    "Male" = "1"))
+```
+
+```{r}
+parole <- parole %>%
+  mutate(race = as_factor(as.character(race))) %>%
+  mutate(race = fct_recode(race,
+    "white" = "1",
+    "poc" = "2")) #person of color
+```
+
+```{r}
+parole <- parole %>%
+  mutate(state = as_factor(state)) %>%
+  mutate(state = fct_recode(state,
+    "Other" = "1",
+    "Kentucky" = "2",
+    "Louisiana" = "3",
+    "Virginia" = "4"))
+```
+
+```{r}
+parole <- parole %>%
+  mutate(crime = as_factor(as.character(crime))) %>%
+  mutate(crime = fct_recode(crime,
+    "other" = "1",
+    "larceny" = "2",
+    "drug-related" = "3",
+    "driving-related" = "4"))
+```
+
+```{r}
+parole <- parole %>%
+  mutate(multiple.offenses = as_factor(as.character(multiple.offenses))) %>%
+  mutate(multiple.offenses = fct_recode(multiple.offenses,
+    "single_offense" = "0",
+    "multiple_offenses" = "1"))
+```
+
+```{r}
+parole <- parole %>%
+  mutate(violator = as_factor(as.character(violator))) %>%
+  mutate(violator = fct_recode(violator,
+    "no_violations" = "0",
+    "violated" = "1"))
+```
+
+Task 1
+```{r}
+set.seed(12345) 
+train.rows <- createDataPartition(y = parole$violator, p=0.7, list = FALSE)
+train <- parole[train.rows,] 
+test <- parole[-train.rows,]
+```
+
+Task 2
+```{r}
+fitControl <- trainControl(method = "cv", number = 10)
+nnetGrid <- expand.grid(size = 12, decay = 0.1)
+set.seed(1234)
+nnet <- train(x=as.data.frame(parole[,-1]),y=as.matrix(parole$violator), 
+                 method = "nnet",
+                 trControl = fitControl,
+                 tuneGrid = nnetGrid,
+                 verbose = FALSE)
+
+```
+
+Task 3
+```{r}
+predNet <- predict(nnet, train)
+confusionMatrix(predNet, train$violator, positive = "violated")
+```
+Accuracy: 1
+Sensitivity: 1
+Specificity: 1
+No information rate: .8837
+
+Task 4
+```{r}
+fitControl <- trainControl(method = "cv", number = 10)
+nnetGrid1 <- expand.grid(size = seq(from = 1, to = 12, by = 1), decay = seq(from = .01, to = 0.5, by = 0.1))
+set.seed(1234)
+nnet1 <- train(x=as.data.frame(parole[,-1]),y=as.matrix(parole$violator), 
+                 method = "nnet",
+                 trControl = fitControl,
+                 tuneGrid = nnetGrid1,
+                 verbose = FALSE,
+                 trace = FALSE)
+
+```
+
+Task 5
+```{r}
+predNet1 <- predict(nnet1, train)
+confusionMatrix(predNet1, train$violator, positive = "violated")
+```
+Accuracy: 1
+Sensitivity: 1
+Specificity: 1
+No information rate: .8837
+
+Task 6
+```{r}
+predNet2 <- predict(nnet, test)
+confusionMatrix(predNet2, test$violator, positive = "violated")
+```
+Accuracy: 1
+Sensitivity: 1
+Specificity: 1
+No information rate: .8861
+
+Task 7
+```{r}
+predNet3 <- predict(nnet1, test)
+confusionMatrix(predNet3, test$violator, positive = "violated")
+```
+Accuracy: 1
+Sensitivity: 1
+Specificity: 1
+No information rate: .8861
+
+Task 8
+There is no difference in accuracy between the two models, but the confusion matrix shows that the largest class forms the majority of the population.
+
+Task 9
+```{r}
+ensemblecontrol = trainControl(
+  method = "cv",
+  number = 5,
+  savePredictions = "final",
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary
+  )
+```
+
+```{r}
+set.seed(111)
+model_list = caretList(
+  x = as.data.frame(train[,-9]),y=as.matrix(train$violator),
+  metric = "ROC",
+  trControl= ensemblecontrol,
+  methodList=c("glm","ranger","rpart", "nnet"),
+  tuneList=list(
+    rf = caretModelSpec(method = "ranger", tuneLength=6),
+    rpart = caretModelSpec(method = "rpart", tuneLength=6),
+    nn = caretModelSpec(method = "nnet", tuneLength=6, trace=FALSE)
+  ))
+```
+
+```{r}
+as.data.frame(predict(model_list, newdata=head(train)))
+```
+
+```{r}
+modelCor(resamples(model_list))
+```
+Rf and ranger are the highest correlated models.
+
+```{r}
+ensemble = caretEnsemble(
+  model_list, 
+  metric="ROC",
+  trControl=trainControl(
+    method = "cv",
+    number= 5,
+    summaryFunction=twoClassSummary,
+    classProbs=TRUE
+    ))
+```
+
+```{r}
+summary(ensemble)
+```
+From the summary, we see that the resulting ROC for the ensemble is .8106. This is a higher value than the ROC for the rpart model and a lower value than the ROC for the rf, rpart, nn, glm, and ranger models.
+
+```{r}
+pred_ensemble = predict(ensemble, train, type = "raw")
+confusionMatrix(pred_ensemble,train$violator)
+
+pred_ensemble_test = predict(ensemble, test, type = "raw")
+confusionMatrix(pred_ensemble_test,test$violator)
+```
+Train
+Accuracy: .9619
+Sensitivity: 1
+Specificity: .6727
+
+Test
+Accuracy: .8911
+Sensitivity: .9888
+Specificity: .1304
+
+Task 10
+
+```{r}
+stack = caretStack(
+  model_list,
+  method ="glm",
+  metric ="ROC",
+  trControl = trainControl(
+    method = "cv", 
+    number = 5,
+    savePredictions = "final",
+    classProbs = TRUE,
+    summaryFunction = twoClassSummary
+  ))
+
+```
+
+```{r}
+print(stack)
+```
+ROC .811
+
+```{r}
+pred_stack = predict(stack, train, type = "raw")
+confusionMatrix(pred_stack,train$violator)
+
+pred_stack_test = predict(stack, test, type = "raw")
+confusionMatrix(pred_stack_test,test$violator)
+```
+Train
+Accuracy: .9619
+Sensitivity: 1
+Specificty: .6727
+
+Test
+Accuracy: .8911
+Sensitivity: .988
+Specificity: .1304

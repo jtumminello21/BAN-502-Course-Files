@@ -1,0 +1,125 @@
+---
+editor_options:
+  chunk_output_type: console
+output:
+  word_document: default
+  html_document: default
+---
+```{r}
+library(tidyverse)
+library(cluster)
+library(factoextra)
+library(dendextend)
+```
+
+```{r}
+trucks <- read_csv("trucks.csv")
+```
+
+Task 1
+```{r}
+ggplot(data = trucks, aes(Distance, Speeding)) +
+  geom_point()
+```
+Drivers who average 0-100 miles a day tend to speed 0-65% of their time driving. Drivers who average 125-250 miles a day tend to speed more often 0-25% of the time, and less often 25-100% of the time. When someone is driving many miles in one day, they are more likely to speed for more of their trip.
+
+Task 2
+```{r}
+trucks2 <- trucks %>%
+  select(Distance, Speeding)
+  as.data.frame(scale(trucks2))
+```
+
+Task 3
+```{r}
+set.seed(1234)
+clusters <- kmeans(trucks2, 2)
+fviz_cluster(clusters, trucks2)
+```
+ANSWER
+
+Task 4
+```{r}
+set.seed(123)
+fviz_nbclust(trucks2, kmeans, method = "wss")
+
+set.seed(123)
+fviz_nbclust(trucks2, kmeans, method = "silhouette")
+```
+WSS: 2
+Silhouette: 2
+
+Task 5
+```{r}
+set.seed(1234)
+clusters1 <- kmeans(trucks2, 2)
+clusters1 
+fviz_cluster(clusters1, trucks2)
+```
+
+Task 6
+It doesn't look like these clusters share many characteristics. There are two well defined groups.
+
+```{r}
+wine <- read_csv("wineprice.csv")
+
+wine2 <- wine %>%
+  select(Price, WinterRain, AGST, HarvestRain, Age)
+  as.data.frame(scale(wine2))
+```
+
+Task 7
+```{r}
+set.seed(123)
+clusters <- kmeans(wine2, 2)
+fviz_cluster(clusters, trucks2)
+
+set.seed(123)
+fviz_nbclust(wine2, kmeans, method = "wss")
+
+set.seed(123)
+fviz_nbclust(wine2, kmeans, method = "silhouette")
+```
+WSS: 2
+Silhouette: 2
+
+Task 8
+```{r}
+set.seed(1234)
+clusters2 <- kmeans(wine2, 2)
+clusters2 
+fviz_cluster(clusters2, wine2)
+```
+
+Task 9
+```{r}
+m = c( "average", "single", "complete", "ward")
+names(m) = c( "average", "single", "complete", "ward")
+
+ac = function(x) {
+  agnes(wine2, method = x)$ac
+}
+map_dbl(m, ac)
+```
+
+```{r}
+hc = agnes(wine2, method = "ward")
+pltree(hc, cex = 0.6, hang = -1, main = "Agglomerative Dendrogram") 
+```
+
+Task 10
+```{r}
+hc2 = diana(wine2)
+pltree(hc2, cex = 0.6, hang = -1, main = "Divisive Dendogram")
+```
+
+```{r}
+plot(hc, cex.axis= 0.5) 
+rect.hclust(hc2, k = 5, border = 2:6)
+```
+
+```{r}
+plot(hc2, cex.axis= 0.5) 
+rect.hclust(hc2, k = 5, border = 2:6)
+```
+
